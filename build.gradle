@@ -1,0 +1,96 @@
+plugins {
+	id 'java'
+	id 'org.springframework.boot' version '3.3.6'
+	id 'io.spring.dependency-management' version '1.1.6'
+	id 'com.github.node-gradle.node' version '7.1.0'
+}
+
+group = 'camp.coconut'
+version = '0.0.1-SNAPSHOT'
+
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(17)
+	}
+}
+
+configurations {
+	compileOnly {
+		extendsFrom annotationProcessor
+	}
+}
+
+repositories {
+	mavenCentral()
+	maven { url 'https://repo.spring.io/milestone' }
+}
+
+ext {
+	set('springAiVersion', "1.0.0-M4")
+}
+
+dependencies {
+	implementation 'org.springframework.boot:spring-boot-starter-validation'
+	implementation 'org.springframework.boot:spring-boot-starter-webflux'
+	implementation 'org.springframework.ai:spring-ai-bedrock-converse-spring-boot-starter'
+	implementation 'org.springframework.ai:spring-ai-openai-spring-boot-starter'
+	implementation platform('software.amazon.awssdk:bom:2.29.24')
+	implementation 'software.amazon.awssdk:s3'
+	compileOnly 'org.projectlombok:lombok'
+	developmentOnly 'org.springframework.boot:spring-boot-devtools'
+	annotationProcessor 'org.projectlombok:lombok'
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	testImplementation 'io.projectreactor:reactor-test'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+dependencyManagement {
+	imports {
+		mavenBom "org.springframework.ai:spring-ai-bom:${springAiVersion}"
+	}
+}
+
+tasks.named('test') {
+	useJUnitPlatform()
+}
+
+node {
+	version = '23.3.0'
+	npmVersion = '10.9.0'
+	download = true
+	nodeProjectDir = file("src/main/resources/react")
+}
+
+tasks.register('cleanReactStatic', Delete) {
+	group = 'frontend'
+	description = 'Cleans the react static files'
+	delete(file('src/main/resources/static'))
+}
+
+tasks.register('buildFrontend', Exec) {
+	group = 'frontend'
+	description = 'Builds the React app and copies it to static resources'
+
+	workingDir = file('src/main/resources/react')
+	commandLine = ['npm', 'run', 'build']
+
+	doLast {
+		copy {
+			from(file('src/main/resources/react/build'))
+			into(file('src/main/resources/static'))
+		}
+	}
+}
+
+tasks.named('buildFrontend').configure {
+	dependsOn('cleanReactStatic')
+}
+
+tasks.named('processResources') {
+	dependsOn('buildFrontend')
+	exclude('react/**')
+}
+
+tasks.named("bootRun") {
+	dependsOn("buildFrontend")
+}
